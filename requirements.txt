@@ -1,0 +1,10 @@
+# requirements.txt
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+streamlit>=1.25.0
+python-dotenv>=1.0.0
+# requests>=2.30.0 # Replaced by httpx
+python-upwork-oauth2>=3.1.0 # Correct OAuth2 SDK for Upwork
+httpx>=0.27.0 # Used for manual OAuth token exchange (keep as backup?)
+pandas>=1.3.0 # For CSV export in frontend
+requests-oauthlib==1.3.1 # Specific version needed by python-upwork-oauth2
