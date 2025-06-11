@@ -1,5 +1,6 @@
 # backend/upwork_api.py
 import os
+from backend.main import token_cache
 # --- CORRECTED IMPORTS ---
 # Import Client and Config directly from their modules
 from upwork.client import Client
@@ -22,8 +23,8 @@ UPWORK_GQL_ENDPOINT = "https://api.upwork.com/graphql"
 # --- Client Initialization (Corrected Import Usage) ---
 def get_authenticated_client():
     """Creates and returns an authenticated Upwork client instance using python-upwork-oauth2."""
-    access_token = os.getenv("UPWORK_ACCESS_TOKEN")
-    refresh_token = os.getenv("UPWORK_REFRESH_TOKEN")
+    access_token = token_cache.get("access_token")
+    refresh_token = token_cache.get("refresh_token")
     client_id = os.getenv("UPWORK_CLIENT_ID")
     client_secret = os.getenv("UPWORK_CLIENT_SECRET")
     redirect_uri = os.getenv("UPWORK_REDIRECT_URI")
@@ -143,6 +144,8 @@ async def search_upwork_jobs_gql(
                         totalReviews
                     }
                     duration
+                    amount { currencyCode amount }
+                    hourlyBudget { currencyCode amount }
                 }
             }
             pageInfo { endCursor hasNextPage }
@@ -212,13 +215,28 @@ async def search_upwork_jobs_gql(
             for edge in search_results['edges']:
                 node = edge.get('node', {})
                 job_details=node.get('job',{}) or {}; contract_terms=job_details.get('contractTerms',{}) or {}; client_details=node.get('client',{}) or {}; client_location=client_details.get('location',{}) or {}
+
+                job_url = f"https://www.upwork.com/jobs/{node.get('ciphertext')}"
+
+                rate = None
+                hourly_budget = node.get('hourlyBudget')
+                if hourly_budget and hourly_budget.get('amount') is not None:
+                    rate = f"{hourly_budget.get('amount')} {hourly_budget.get('currencyCode')}/hr"
+                else:
+                    amount_info = node.get('amount')
+                    if amount_info and amount_info.get('amount') is not None:
+                        rate = f"{amount_info.get('amount')} {amount_info.get('currencyCode')}"
+
                 job = {"title": node.get('title'), "id": node.get('ciphertext'), "ciphertext": node.get('ciphertext'), # Using ciphertext as id
                        "snippet": node.get('description'), "skills": [s.get('name') for s in node.get('skills', []) if s.get('name')],
                        "date_created": node.get('createdDateTime'), "category2": node.get('category'), "subcategory2": node.get('subcategory'),
                        "job_type": contract_terms.get('contractType'), "workload": None, "duration": node.get('duration'),
                        "client": { "country": client_location.get('country'), "feedback": client_details.get('totalFeedback'),
                                    "jobs_posted": client_details.get('totalPostedJobs'), "past_hires": client_details.get('totalHires'),
-                                   "payment_verification_status": client_details.get('verificationStatus'), "reviews_count": client_details.get('totalReviews'), }}
+                                   "payment_verification_status": client_details.get('verificationStatus'), "reviews_count": client_details.get('totalReviews'), },
+                       "url": job_url,
+                       "rate": rate
+                      }
                 transformed_jobs.append(job)
 
         paging_info = { "total": search_results.get('totalCount'),
