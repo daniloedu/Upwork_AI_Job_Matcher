@@ -1,4 +1,5 @@
 # backend/main.py
+token_cache = {}
 import os
 import logging
 from fastapi import FastAPI, Request, Query, HTTPException
@@ -79,12 +80,10 @@ async def oauth_callback(request: Request, code: str = Query(...), state: str = 
             refresh_token = tokens.get('refresh_token')
             if not access_token: raise Exception("Access token not found...")
             logger.info("Successfully obtained access and refresh tokens.")
-            # ... (save to .env) ...
-            if not os.path.exists(DOTENV_PATH): open(DOTENV_PATH, 'a').close()
-            set_key(DOTENV_PATH, "UPWORK_ACCESS_TOKEN", access_token)
-            set_key(DOTENV_PATH, "UPWORK_REFRESH_TOKEN", refresh_token or "")
-            logger.info(f"Tokens saved to {DOTENV_PATH}")
-            load_dotenv(dotenv_path=DOTENV_PATH, override=True)
+            # Store tokens in cache
+            token_cache["access_token"] = access_token
+            token_cache["refresh_token"] = refresh_token
+            logger.info("Tokens stored in cache.")
             return RedirectResponse(url=f"{FRONTEND_URL}?auth_status=success&refresh=true")
     except httpx.HTTPStatusError as e:
         # ... (error handling is likely OK) ...
@@ -101,8 +100,7 @@ async def oauth_callback(request: Request, code: str = Query(...), state: str = 
 @app.get("/auth/status", tags=["Authentication"])
 async def get_auth_status():
     # ... (function is likely OK) ...
-    load_dotenv(dotenv_path=DOTENV_PATH, override=True)
-    access_token = os.getenv("UPWORK_ACCESS_TOKEN")
+    access_token = token_cache.get("access_token")
     authenticated = bool(access_token)
     logger.info(f"Auth status check: {authenticated}")
     return {"authenticated": authenticated}
